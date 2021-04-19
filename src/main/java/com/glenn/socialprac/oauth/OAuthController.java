@@ -32,6 +32,7 @@ public class OAuthController {
 
     private final MemberRepository memberRepository;
     private final JwtTokenProvider jwtTokenProvider;
+
     final static String GOOGLE_TOKEN_BASE_URL = "https://oauth2.googleapis.com/token";
 
     @Value("${spring.security.oauth2.client.registration.google.client-id}")
@@ -61,26 +62,33 @@ public class OAuthController {
         objectMapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
 
         // Access token 발급
-        ResponseEntity<String> resultEntity = restTemplate.postForEntity(GOOGLE_TOKEN_BASE_URL, googleOAuthRequestParam, String.class);
-        System.out.println(resultEntity.getBody());
-
-        GoogleOAuthResponse result = objectMapper.readValue(resultEntity.getBody(), new TypeReference<GoogleOAuthResponse>() {});
+        GoogleOAuthResponse result = getGoogleAccessToken(googleOAuthRequestParam, objectMapper, restTemplate);
 
         // 유저 정보 획득
-        String jwtToken = result.getIdToken();
-        String requestUrl = UriComponentsBuilder
-                .fromHttpUrl("https://oauth2.googleapis.com/tokeninfo")
-                .queryParam("id_token", jwtToken).encode().toUriString();
-
-        String resultJson = restTemplate.getForObject(requestUrl, String.class);
-
-        Map<String,String> userInfo = objectMapper.readValue(resultJson, new TypeReference<Map<String, String>>(){});
+        Map<String,String> userInfo = getGoogleInfo(result.getIdToken(), objectMapper, restTemplate);
 
         Member member = getMember(userInfo);
         MemberDetails memberDetails = new MemberDetails(member);
         String token = jwtTokenProvider.createToken(member.getId(), memberDetails.getAuthorities());
 
+        System.out.println(token);
         return ResponseEntity.status(HttpStatus.OK).body(memberDetails);
+    }
+
+    private GoogleOAuthResponse getGoogleAccessToken(GoogleOAuthRequest googleOAuthRequest, ObjectMapper objectMapper, RestTemplate restTemplate) throws JsonProcessingException {
+        ResponseEntity<String> resultEntity = restTemplate.postForEntity(GOOGLE_TOKEN_BASE_URL, googleOAuthRequest, String.class);
+
+        return objectMapper.readValue(resultEntity.getBody(), new TypeReference<GoogleOAuthResponse>() {});
+    }
+
+    private Map<String, String> getGoogleInfo(String idToken, ObjectMapper objectMapper, RestTemplate restTemplate) throws JsonProcessingException {
+        String requestUrl = UriComponentsBuilder
+                .fromHttpUrl("https://oauth2.googleapis.com/tokeninfo")
+                .queryParam("id_token", idToken).encode().toUriString();
+
+        String resultJson = restTemplate.getForObject(requestUrl, String.class);
+
+        return objectMapper.readValue(resultJson, new TypeReference<Map<String, String>>(){});
     }
 
     private Member getMember(Map<String, String> userInfo) {
