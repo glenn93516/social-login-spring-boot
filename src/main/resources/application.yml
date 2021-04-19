@@ -8,6 +8,8 @@ server:
 spring:
   profiles:
     active: local
+    include:
+      - oauth
 
   datasource:
     url: jdbc:h2:tcp://localhost/~/datajpa
@@ -22,6 +24,8 @@ spring:
       hibernate:
         show_sql: true
         format_sql: true
+
+redirect-url: http://localhost:8080/api/auth
 
 
 ## Logging
