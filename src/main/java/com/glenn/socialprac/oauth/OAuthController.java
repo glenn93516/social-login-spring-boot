@@ -5,8 +5,13 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategy;
+import com.glenn.socialprac.Member.Member;
+import com.glenn.socialprac.Member.MemberDetails;
+import com.glenn.socialprac.Member.MemberRepository;
+import com.glenn.socialprac.Member.dto.MemberDto;
 import com.glenn.socialprac.oauth.dto.GoogleOAuthRequest;
 import com.glenn.socialprac.oauth.dto.GoogleOAuthResponse;
+import com.glenn.socialprac.utils.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -25,6 +30,8 @@ import java.util.Map;
 @RequestMapping("/auth")
 public class OAuthController {
 
+    private final MemberRepository memberRepository;
+    private final JwtTokenProvider jwtTokenProvider;
     final static String GOOGLE_TOKEN_BASE_URL = "https://oauth2.googleapis.com/token";
 
     @Value("${spring.security.oauth2.client.registration.google.client-id}")
@@ -69,7 +76,29 @@ public class OAuthController {
 
         Map<String,String> userInfo = objectMapper.readValue(resultJson, new TypeReference<Map<String, String>>(){});
 
-        System.out.println(userInfo.toString());
-        return ResponseEntity.status(HttpStatus.OK).body(authorizationCode);
+        Member member = getMember(userInfo);
+        MemberDetails memberDetails = new MemberDetails(member);
+        String token = jwtTokenProvider.createToken(member.getId(), memberDetails.getAuthorities());
+
+        return ResponseEntity.status(HttpStatus.OK).body(memberDetails);
     }
+
+    private Member getMember(Map<String, String> userInfo) {
+        String email = userInfo.get("email");
+        String name = userInfo.get("name");
+        String img = userInfo.get("picture");
+
+        MemberDto memberDto = MemberDto.builder()
+                .email(email)
+                .name(name)
+                .img(img)
+                .build();
+
+        Member member = memberRepository.findByEmail(email)
+                .map(m -> m.updateInfo(m.getName(), m.getImg()))
+                .orElse(memberDto.toMember());
+
+        return memberRepository.save(member);
+    }
+
 }

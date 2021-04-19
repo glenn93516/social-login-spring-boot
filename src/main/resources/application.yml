@@ -22,7 +22,7 @@ spring:
       ddl-auto: create
     properties:
       hibernate:
-        show_sql: true
+#        show_sql: true
         format_sql: true
 
 redirect-url: http://localhost:8080/api/auth
